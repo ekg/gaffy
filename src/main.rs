@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 
 fn main() -> io::Result<()> {
-    let matches = App::new("gaffer")
+    let matches = App::new("gaffy")
         .version("0.1.0")
         .author("Erik Garrison <erik.garrison@gmail.com>")
         .about("Manipulate GAF (graph alignment format) files")

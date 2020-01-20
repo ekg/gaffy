@@ -4,37 +4,6 @@ use std::io::{self, prelude::*, BufReader};
 extern crate clap;
 use clap::{Arg, App};
 
-fn do_vectorize(filename: &str, trim_read_name: bool) {
-    let file = File::open(filename).unwrap();
-    let reader = BufReader::new(file);
-    println!("name\tquery.length\tnode.id\trank");
-    for line in reader.lines() {
-        // parse the line
-        let l = line.unwrap();
-        //println!("{}", l);
-        let mut i = 0;
-        let mut name = "";
-        let mut path = "";
-        let mut query_length: u64 = 0;
-        for s in l.split("\t") {
-            i = i + 1;
-            match i {
-                1 => name = if trim_read_name { s.split_ascii_whitespace().nth(0).unwrap() } else { s },
-                2 => query_length = s.parse::<u64>().unwrap(),
-                6 => path = s,
-                _ => { },
-            };
-        }
-        i = 0;
-        for n in path.split(|c| c == '<' || c == '>') {
-            if !n.is_empty() {
-                i += 1;
-                println!("{}\t{}\t{}\t{}", name, query_length, n, i);
-            }
-        }
-    }
-}
-
 fn gaf_max_id(filename: &str) -> usize {
     let mut max_id = usize::min_value();
     let file = File::open(filename).unwrap();
@@ -92,13 +61,14 @@ fn gaf_nth_longest_read(filename: &str,
 }
 
 fn do_matrix(filename: &str,
+             vectorize: bool,
              mut max_id: usize,
              min_length: u64,
              max_length: u64,
              trim_read_name: bool,
              group_name: &str,
              keep_n_longest: usize) {
-    if max_id == 0 {
+    if !vectorize && max_id == 0 {
         max_id = gaf_max_id(filename);
     }
     let mut query_length_threshold = u64::min_value();
@@ -108,9 +78,13 @@ fn do_matrix(filename: &str,
     if group_name != "" {
         print!("group.name\t");
     }
-    print!("aln.name\tquery.length\tnode.count");
-    for x in 1..=max_id {
-        print!("\tnode.{}", x);
+    if vectorize {
+        print!("aln.name\tquery.length\tnode.id\trank");
+    } else {
+        print!("aln.name\tquery.length\tnode.count");
+        for x in 1..=max_id {
+            print!("\tnode.{}", x);
+        }
     }
     print!("\n");
     io::stdout().flush().unwrap();
@@ -130,27 +104,36 @@ fn do_matrix(filename: &str,
                 _ => { },
             };
         }
-        let mut v = vec![0; max_id];
-        for n in path.split(|c| c == '<' || c == '>') {
-            if !n.is_empty() {
-                let id = n.parse::<usize>().unwrap();
-                v[id-1] = 1;
+        if query_length >= min_length && query_length <= max_length && query_length >= query_length_threshold {
+            if vectorize {
+                for (j,n) in path.split(|c| c == '<' || c == '>').enumerate() {
+                    if !n.is_empty() {
+                        if group_name != "" {
+                            print!("{}\t", group_name);
+                        }
+                        print!("{}\t{}\t{}\t{}\n", name, query_length, n, j);
+                    }
+                }
+            } else {
+                let mut v = vec![0; max_id];
+                for n in path.split(|c| c == '<' || c == '>') {
+                    if !n.is_empty() {
+                        let id = n.parse::<usize>().unwrap();
+                        v[id-1] = 1;
+                    }
+                }
+                if group_name != "" {
+                    print!("{}\t", group_name);
+                }
+                print!("{}", name);
+                print!("\t{}", query_length);
+                let sum: u64 = v.iter().sum();
+                print!("\t{}", sum);
+                for x in v {
+                    print!("\t{}", x);
+                }
+                print!("\n");
             }
-        }
-        if query_length >= min_length
-            && query_length <= max_length
-            && query_length >= query_length_threshold {
-            if group_name != "" {
-                print!("{}\t", group_name);
-            }
-            print!("{}", name);
-            print!("\t{}", query_length);
-            let sum: u64 = v.iter().sum();
-            print!("\t{}", sum);
-            for x in v {
-                print!("\t{}", x);
-            }
-            print!("\n");
             io::stdout().flush().unwrap(); // maybe not necessary
         }
     }
@@ -175,10 +158,6 @@ fn main() -> io::Result<()> {
              .short("v")
              .long("vectorize")
              .help("Write a tabular representation of the alignments (one record per alignment node traversal)"))
-        .arg(Arg::with_name("matrix")
-             .short("m")
-             .long("matrix")
-             .help("Write a binary matrix representing coverage across the graph (two passes over input file)."))
         .arg(Arg::with_name("trim-read-name")
              .short("t")
              .long("trim-read-name")
@@ -204,37 +183,38 @@ fn main() -> io::Result<()> {
              .takes_value(true)
              .help("Keep reads longer than this length (before keep-n-longest calculations)."))
         .get_matches();
+
     let filename = matches.value_of("INPUT").unwrap();
-    if matches.is_present("vectorize") {
-        do_vectorize(filename, matches.is_present("trim-read-name"));
-    } else if matches.is_present("matrix") {
-        let max_id = if matches.is_present("gfa") {
-            gfa_max_id(matches.value_of("gfa").unwrap())
-        } else {
-            usize::min_value()
-        };
-        let keep_n_longest = if matches.is_present("keep-n-longest") {
-            matches.value_of("keep-n-longest").unwrap().parse::<usize>().unwrap()
-        } else {
-            0
-        };
-        let min_length = if matches.is_present("min-length") {
-            matches.value_of("min-length").unwrap().parse::<u64>().unwrap()
-        } else {
-            0
-        };
-        let max_length = if matches.is_present("max-length") {
-            matches.value_of("max-length").unwrap().parse::<u64>().unwrap()
-        } else {
-            u64::max_value()
-        };
-        do_matrix(filename,
-                  max_id,
-                  min_length,
-                  max_length,
-                  matches.is_present("trim-read-name"),
-                  matches.value_of("group-name").unwrap_or(""),
-                  keep_n_longest);
-    }
+
+    let max_id = if matches.is_present("gfa") {
+        gfa_max_id(matches.value_of("gfa").unwrap())
+    } else {
+        usize::min_value()
+    };
+    let keep_n_longest = if matches.is_present("keep-n-longest") {
+        matches.value_of("keep-n-longest").unwrap().parse::<usize>().unwrap()
+    } else {
+        0
+    };
+    let min_length = if matches.is_present("min-length") {
+        matches.value_of("min-length").unwrap().parse::<u64>().unwrap()
+    } else {
+        0
+    };
+    let max_length = if matches.is_present("max-length") {
+        matches.value_of("max-length").unwrap().parse::<u64>().unwrap()
+    } else {
+        u64::max_value()
+    };
+
+    do_matrix(filename,
+              matches.is_present("vectorize"),
+              max_id,
+              min_length,
+              max_length,
+              matches.is_present("trim-read-name"),
+              matches.value_of("group-name").unwrap_or(""),
+              keep_n_longest);
+
     Ok(())
 }

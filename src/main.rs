@@ -42,7 +42,7 @@ fn gaf_max_min_id(filename: &str) -> (usize, usize) {
     let reader = BufReader::new(file);
     for line in reader.lines() {
         let l = line.unwrap();
-        let path = l.split("\t").nth(6).unwrap();
+        let path = l.split("\t").nth(5).unwrap();
         for n in path.split(|c| c == '<' || c == '>') {
             if !n.is_empty() {
                 let id = n.parse::<usize>().unwrap();

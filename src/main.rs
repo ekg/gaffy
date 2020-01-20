@@ -72,12 +72,18 @@ fn gfa_max_id(gfa_filename: &str) -> usize {
     max_id
 }
 
-fn gaf_nth_longest_read(filename: &str, keep_n_longest: usize) -> u64 {
+fn gaf_nth_longest_read(filename: &str,
+                        keep_n_longest: usize,
+                        min_length: u64,
+                        max_length: u64) -> u64 {
     let mut v = Vec::new();
     let file = File::open(filename).unwrap();
     let reader = BufReader::new(file);
     for line in reader.lines() {
-        v.push(line.unwrap().split("\t").nth(1).unwrap().parse::<u64>().unwrap());
+        let length = line.unwrap().split("\t").nth(1).unwrap().parse::<u64>().unwrap();
+        if length >= min_length && length <= max_length {
+            v.push(length);
+        }
     }
     // sort by decreasing length
     v.sort_by(|a, b| b.partial_cmp(a).unwrap());
@@ -87,6 +93,8 @@ fn gaf_nth_longest_read(filename: &str, keep_n_longest: usize) -> u64 {
 
 fn do_matrix(filename: &str,
              mut max_id: usize,
+             min_length: u64,
+             max_length: u64,
              trim_read_name: bool,
              group_name: &str,
              keep_n_longest: usize) {
@@ -95,7 +103,7 @@ fn do_matrix(filename: &str,
     }
     let mut query_length_threshold = u64::min_value();
     if keep_n_longest > 0 {
-        query_length_threshold = gaf_nth_longest_read(filename, keep_n_longest);
+        query_length_threshold = gaf_nth_longest_read(filename, keep_n_longest, min_length, max_length);
     }
     if group_name != "" {
         print!("group.name\t");
@@ -129,7 +137,9 @@ fn do_matrix(filename: &str,
                 v[id-1] = 1;
             }
         }
-        if query_length >= query_length_threshold {
+        if query_length >= min_length
+            && query_length <= max_length
+            && query_length >= query_length_threshold {
             if group_name != "" {
                 print!("{}\t", group_name);
             }
@@ -183,9 +193,18 @@ fn main() -> io::Result<()> {
              .long("keep-n-longest")
              .takes_value(true)
              .help("Keep the longest N reads."))
+        .arg(Arg::with_name("max-length")
+             .short("M")
+             .long("max-length")
+             .takes_value(true)
+             .help("Keep reads shorter than this length (before keep-n-longest calculations)."))
+        .arg(Arg::with_name("min-length")
+             .short("L")
+             .long("min-length")
+             .takes_value(true)
+             .help("Keep reads longer than this length (before keep-n-longest calculations)."))
         .get_matches();
     let filename = matches.value_of("INPUT").unwrap();
-    //println!("{}", filename);
     if matches.is_present("vectorize") {
         do_vectorize(filename, matches.is_present("trim-read-name"));
     } else if matches.is_present("matrix") {
@@ -199,8 +218,20 @@ fn main() -> io::Result<()> {
         } else {
             0
         };
+        let min_length = if matches.is_present("min-length") {
+            matches.value_of("min-length").unwrap().parse::<u64>().unwrap()
+        } else {
+            0
+        };
+        let max_length = if matches.is_present("max-length") {
+            matches.value_of("max-length").unwrap().parse::<u64>().unwrap()
+        } else {
+            u64::max_value()
+        };
         do_matrix(filename,
                   max_id,
+                  min_length,
+                  max_length,
                   matches.is_present("trim-read-name"),
                   matches.value_of("group-name").unwrap_or(""),
                   keep_n_longest);

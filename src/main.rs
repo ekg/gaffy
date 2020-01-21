@@ -25,22 +25,59 @@ fn gaf_max_id(filename: &str) -> usize {
     max_id
 }
 
-fn gfa_max_id(gfa_filename: &str) -> usize {
+fn for_each_line_in_gfa(gfa_filename: &str, line_type: &str, mut callback: impl FnMut(&str)) {
     let file = File::open(gfa_filename).unwrap();
     let reader = BufReader::new(file);
-    let mut max_id = usize::min_value();
     for line in reader.lines() {
-        // parse the line
         let l = line.unwrap();
-        let linetype = l.split('\t').nth(0).unwrap();
-        if linetype == "S" {
+        let curr_type = l.split('\t').nth(0).unwrap();
+        if curr_type == line_type {
+            callback(&l);
+        }
+    }
+}
+
+struct GfaGraph {
+    node_length: Vec<usize>,
+    max_id: usize,
+}
+
+impl GfaGraph {
+    fn new() -> Self {
+        GfaGraph {
+            node_length: vec![],
+            max_id: usize::min_value(),
+        }
+    }
+    fn from_gfa(gfa_filename: &str) -> Self {
+        let mut max_id = usize::min_value();
+        for_each_line_in_gfa(gfa_filename, "S", |l: &str| {
             let id = l.split('\t').nth(1).unwrap().parse::<usize>().unwrap();
             if id > max_id {
                 max_id = id;
             }
+        });
+        let mut node_length = Vec::<usize>::new();
+        node_length.resize(max_id, 0);
+        for_each_line_in_gfa(gfa_filename, "S", |l: &str| {
+            let id = l.split('\t').nth(1).unwrap().parse::<usize>().unwrap();
+            let seq = l.split('\t').nth(2).unwrap();
+            node_length[id - 1] = seq.len();
+        });
+        GfaGraph {
+            node_length,
+            max_id,
         }
     }
-    max_id
+    fn get_node_length(self: &GfaGraph, id: usize) -> usize {
+        self.node_length[id - 1]
+    }
+    fn get_max_id(self: &GfaGraph) -> usize {
+        self.max_id
+    }
+    fn loaded(self: &GfaGraph) -> bool {
+        self.max_id != 0
+    }
 }
 
 fn gaf_nth_longest_read(
@@ -76,7 +113,9 @@ fn gaf_nth_longest_read(
 
 fn do_matrix(
     filename: &str,
+    gfa_filename: &str,
     vectorize: bool,
+    binary_out: bool,
     mut max_id: usize,
     min_length: u64,
     max_length: u64,
@@ -84,6 +123,16 @@ fn do_matrix(
     group_name: &str,
     keep_n_longest: usize,
 ) {
+    let graph = if !gfa_filename.is_empty() {
+        GfaGraph::from_gfa(gfa_filename)
+    } else {
+        GfaGraph::new()
+    };
+    max_id = if graph.loaded() {
+        graph.get_max_id()
+    } else {
+        max_id
+    };
     if !vectorize && max_id == 0 {
         max_id = gaf_max_id(filename);
     }
@@ -145,7 +194,13 @@ fn do_matrix(
                 for n in path.split(|c| c == '<' || c == '>') {
                     if !n.is_empty() {
                         let id = n.parse::<usize>().unwrap();
-                        v[id - 1] = 1;
+                        v[id - 1] = if binary_out {
+                            1
+                        } else if graph.loaded() {
+                            graph.get_node_length(id)
+                        } else {
+                            1
+                        };
                     }
                 }
                 if group_name != "" {
@@ -153,7 +208,7 @@ fn do_matrix(
                 }
                 print!("{}", name);
                 print!("\t{}", query_length);
-                let sum: u64 = v.iter().sum();
+                let sum: usize = v.iter().sum();
                 print!("\t{}", sum);
                 for x in v {
                     print!("\t{}", x);
@@ -208,15 +263,22 @@ fn main() -> io::Result<()> {
              .long("min-length")
              .takes_value(true)
              .help("Keep reads longer than this length (before keep-n-longest calculations)."))
+        .arg(Arg::with_name("binary-matrix")
+             .short("b")
+             .long("binary-matrix")
+             .help("Write matrix values as 0 or 1 rather than 0 or GFA node_length."))
         .get_matches();
 
     let filename = matches.value_of("INPUT").unwrap();
 
-    let max_id = if matches.is_present("gfa") {
-        gfa_max_id(matches.value_of("gfa").unwrap())
+    let max_id = usize::min_value();
+
+    let gfa_filename = if matches.is_present("gfa") {
+        matches.value_of("gfa").unwrap()
     } else {
-        usize::min_value()
+        ""
     };
+
     let keep_n_longest = if matches.is_present("keep-n-longest") {
         matches
             .value_of("keep-n-longest")
@@ -226,6 +288,7 @@ fn main() -> io::Result<()> {
     } else {
         0
     };
+
     let min_length = if matches.is_present("min-length") {
         matches
             .value_of("min-length")
@@ -247,7 +310,9 @@ fn main() -> io::Result<()> {
 
     do_matrix(
         filename,
+        gfa_filename,
         matches.is_present("vectorize"),
+        matches.is_present("binary-matrix"),
         max_id,
         min_length,
         max_length,

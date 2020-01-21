@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 
@@ -10,7 +12,7 @@ fn gaf_max_id(filename: &str) -> usize {
     let reader = BufReader::new(file);
     for line in reader.lines() {
         let l = line.unwrap();
-        let path = l.split("\t").nth(5).unwrap();
+        let path = l.split('\t').nth(5).unwrap();
         for n in path.split(|c| c == '<' || c == '>') {
             if !n.is_empty() {
                 let id = n.parse::<usize>().unwrap();
@@ -30,9 +32,9 @@ fn gfa_max_id(gfa_filename: &str) -> usize {
     for line in reader.lines() {
         // parse the line
         let l = line.unwrap();
-        let linetype = l.split("\t").nth(0).unwrap();
+        let linetype = l.split('\t').nth(0).unwrap();
         if linetype == "S" {
-            let id = l.split("\t").nth(1).unwrap().parse::<usize>().unwrap();
+            let id = l.split('\t').nth(1).unwrap().parse::<usize>().unwrap();
             if id > max_id {
                 max_id = id;
             }
@@ -53,7 +55,7 @@ fn gaf_nth_longest_read(
     for line in reader.lines() {
         let length = line
             .unwrap()
-            .split("\t")
+            .split('\t')
             .nth(1)
             .unwrap()
             .parse::<u64>()
@@ -85,11 +87,11 @@ fn do_matrix(
     if !vectorize && max_id == 0 {
         max_id = gaf_max_id(filename);
     }
-    let mut query_length_threshold = u64::min_value();
-    if keep_n_longest > 0 {
-        query_length_threshold =
-            gaf_nth_longest_read(filename, keep_n_longest, min_length, max_length);
-    }
+    let query_length_threshold = if keep_n_longest > 0 {
+        gaf_nth_longest_read(filename, keep_n_longest, min_length, max_length)
+    } else {
+        u64::min_value()
+    };
     if group_name != "" {
         print!("group.name\t");
     }
@@ -101,7 +103,7 @@ fn do_matrix(
             print!("\tnode.{}", x);
         }
     }
-    print!("\n");
+    println!();
     io::stdout().flush().unwrap();
     let file = File::open(filename).unwrap();
     let reader = BufReader::new(file);
@@ -111,7 +113,7 @@ fn do_matrix(
         let mut name = "";
         let mut path = "";
         let mut query_length: u64 = 0;
-        for (i, s) in l.split("\t").enumerate() {
+        for (i, s) in l.split('\t').enumerate() {
             match i {
                 0 => {
                     name = if trim_read_name {
@@ -135,7 +137,7 @@ fn do_matrix(
                         if group_name != "" {
                             print!("{}\t", group_name);
                         }
-                        print!("{}\t{}\t{}\t{}\n", name, query_length, n, j);
+                        println!("{}\t{}\t{}\t{}", name, query_length, n, j);
                     }
                 }
             } else {
@@ -156,7 +158,7 @@ fn do_matrix(
                 for x in v {
                     print!("\t{}", x);
                 }
-                print!("\n");
+                println!();
             }
             io::stdout().flush().unwrap(); // maybe not necessary
         }

@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 
 extern crate clap;
-use clap::{Arg, App};
+use clap::{App, Arg};
 
 fn gaf_max_id(filename: &str) -> usize {
     let mut max_id = usize::min_value();
@@ -41,39 +41,54 @@ fn gfa_max_id(gfa_filename: &str) -> usize {
     max_id
 }
 
-fn gaf_nth_longest_read(filename: &str,
-                        keep_n_longest: usize,
-                        min_length: u64,
-                        max_length: u64) -> u64 {
+fn gaf_nth_longest_read(
+    filename: &str,
+    keep_n_longest: usize,
+    min_length: u64,
+    max_length: u64,
+) -> u64 {
     let mut v = Vec::new();
     let file = File::open(filename).unwrap();
     let reader = BufReader::new(file);
     for line in reader.lines() {
-        let length = line.unwrap().split("\t").nth(1).unwrap().parse::<u64>().unwrap();
+        let length = line
+            .unwrap()
+            .split("\t")
+            .nth(1)
+            .unwrap()
+            .parse::<u64>()
+            .unwrap();
         if length >= min_length && length <= max_length {
             v.push(length);
         }
     }
     // sort by decreasing length
     v.sort_by(|a, b| b.partial_cmp(a).unwrap());
-    let cutoff = if keep_n_longest > v.len() { v.len() } else { keep_n_longest };
-    v[cutoff-1]
+    let cutoff = if keep_n_longest > v.len() {
+        v.len()
+    } else {
+        keep_n_longest
+    };
+    v[cutoff - 1]
 }
 
-fn do_matrix(filename: &str,
-             vectorize: bool,
-             mut max_id: usize,
-             min_length: u64,
-             max_length: u64,
-             trim_read_name: bool,
-             group_name: &str,
-             keep_n_longest: usize) {
+fn do_matrix(
+    filename: &str,
+    vectorize: bool,
+    mut max_id: usize,
+    min_length: u64,
+    max_length: u64,
+    trim_read_name: bool,
+    group_name: &str,
+    keep_n_longest: usize,
+) {
     if !vectorize && max_id == 0 {
         max_id = gaf_max_id(filename);
     }
     let mut query_length_threshold = u64::min_value();
     if keep_n_longest > 0 {
-        query_length_threshold = gaf_nth_longest_read(filename, keep_n_longest, min_length, max_length);
+        query_length_threshold =
+            gaf_nth_longest_read(filename, keep_n_longest, min_length, max_length);
     }
     if group_name != "" {
         print!("group.name\t");
@@ -96,17 +111,26 @@ fn do_matrix(filename: &str,
         let mut name = "";
         let mut path = "";
         let mut query_length: u64 = 0;
-        for (i,s) in l.split("\t").enumerate() {
+        for (i, s) in l.split("\t").enumerate() {
             match i {
-                0 => name = if trim_read_name { s.split_ascii_whitespace().nth(0).unwrap() } else { s },
+                0 => {
+                    name = if trim_read_name {
+                        s.split_ascii_whitespace().nth(0).unwrap()
+                    } else {
+                        s
+                    }
+                }
                 1 => query_length = s.parse::<u64>().unwrap(),
                 5 => path = s,
-                _ => { },
+                _ => {}
             };
         }
-        if query_length >= min_length && query_length <= max_length && query_length >= query_length_threshold {
+        if query_length >= min_length
+            && query_length <= max_length
+            && query_length >= query_length_threshold
+        {
             if vectorize {
-                for (j,n) in path.split(|c| c == '<' || c == '>').enumerate() {
+                for (j, n) in path.split(|c| c == '<' || c == '>').enumerate() {
                     if !n.is_empty() {
                         if group_name != "" {
                             print!("{}\t", group_name);
@@ -119,7 +143,7 @@ fn do_matrix(filename: &str,
                 for n in path.split(|c| c == '<' || c == '>') {
                     if !n.is_empty() {
                         let id = n.parse::<usize>().unwrap();
-                        v[id-1] = 1;
+                        v[id - 1] = 1;
                     }
                 }
                 if group_name != "" {
@@ -192,29 +216,43 @@ fn main() -> io::Result<()> {
         usize::min_value()
     };
     let keep_n_longest = if matches.is_present("keep-n-longest") {
-        matches.value_of("keep-n-longest").unwrap().parse::<usize>().unwrap()
+        matches
+            .value_of("keep-n-longest")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap()
     } else {
         0
     };
     let min_length = if matches.is_present("min-length") {
-        matches.value_of("min-length").unwrap().parse::<u64>().unwrap()
+        matches
+            .value_of("min-length")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap()
     } else {
         0
     };
     let max_length = if matches.is_present("max-length") {
-        matches.value_of("max-length").unwrap().parse::<u64>().unwrap()
+        matches
+            .value_of("max-length")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap()
     } else {
         u64::max_value()
     };
 
-    do_matrix(filename,
-              matches.is_present("vectorize"),
-              max_id,
-              min_length,
-              max_length,
-              matches.is_present("trim-read-name"),
-              matches.value_of("group-name").unwrap_or(""),
-              keep_n_longest);
+    do_matrix(
+        filename,
+        matches.is_present("vectorize"),
+        max_id,
+        min_length,
+        max_length,
+        matches.is_present("trim-read-name"),
+        matches.value_of("group-name").unwrap_or(""),
+        keep_n_longest,
+    );
 
     Ok(())
 }

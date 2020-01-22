@@ -263,10 +263,10 @@ fn main() -> io::Result<()> {
              .long("min-length")
              .takes_value(true)
              .help("Keep reads longer than this length (before keep-n-longest calculations)."))
-        .arg(Arg::with_name("binary-matrix")
-             .short("b")
-             .long("binary-matrix")
-             .help("Write matrix values as 0 or 1 rather than 0 or GFA node_length."))
+        .arg(Arg::with_name("weighted-matrix")
+             .short("w")
+             .long("weighted-matrix")
+             .help("Weight matrix values by GFA node_length."))
         .get_matches();
 
     let filename = matches.value_of("INPUT").unwrap();
@@ -312,7 +312,7 @@ fn main() -> io::Result<()> {
         filename,
         gfa_filename,
         matches.is_present("vectorize"),
-        matches.is_present("binary-matrix"),
+        !matches.is_present("weighted-matrix"),
         max_id,
         min_length,
         max_length,

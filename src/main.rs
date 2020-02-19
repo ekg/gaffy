@@ -184,7 +184,7 @@ fn do_matrix(
         if query_length >= min_length
             && query_length <= max_length
             && query_length >= query_length_threshold
-            && sampling_rate == 1.0 || rng.gen::<f64>() < sampling_rate
+            && (sampling_rate == 1.0 || rng.gen::<f64>() < sampling_rate)
         {
             if vectorize {
                 for (j, n) in path.split(|c| c == '<' || c == '>').enumerate() {

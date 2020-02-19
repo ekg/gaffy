@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33.0"
+rand = "0.7.3"
 
 [dev-dependencies]
 assert_cmd = "0.12.0"

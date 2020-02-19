@@ -6,6 +6,9 @@ use std::io::{self, prelude::*, BufReader};
 extern crate clap;
 use clap::{App, Arg};
 
+extern crate rand;
+use rand::Rng;
+
 fn gaf_max_id(filename: &str) -> usize {
     let mut max_id = usize::min_value();
     let file = File::open(filename).unwrap();
@@ -122,6 +125,7 @@ fn do_matrix(
     trim_read_name: bool,
     group_name: &str,
     keep_n_longest: usize,
+    sampling_rate: f64,
 ) {
     let graph = if !gfa_filename.is_empty() {
         GfaGraph::from_gfa(gfa_filename)
@@ -141,6 +145,7 @@ fn do_matrix(
     } else {
         u64::min_value()
     };
+    let mut rng = rand::thread_rng();
     if group_name != "" {
         print!("group.name\t");
     }
@@ -179,6 +184,7 @@ fn do_matrix(
         if query_length >= min_length
             && query_length <= max_length
             && query_length >= query_length_threshold
+            && sampling_rate == 1.0 || rng.gen::<f64>() < sampling_rate
         {
             if vectorize {
                 for (j, n) in path.split(|c| c == '<' || c == '>').enumerate() {
@@ -267,6 +273,11 @@ fn main() -> io::Result<()> {
              .short("w")
              .long("weighted-matrix")
              .help("Weight matrix values by GFA node_length."))
+        .arg(Arg::with_name("sampling-rate")
+             .short("r")
+             .long("sampling-rate")
+             .takes_value(true)
+             .help("Sample selected alignments at this rate [0-1]."))
         .get_matches();
 
     let filename = matches.value_of("INPUT").unwrap();
@@ -307,6 +318,15 @@ fn main() -> io::Result<()> {
     } else {
         u64::max_value()
     };
+    let sampling_rate = if matches.is_present("sampling-rate") {
+        matches
+            .value_of("sampling-rate")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap()
+    } else {
+        1.0
+    };
 
     do_matrix(
         filename,
@@ -319,6 +339,7 @@ fn main() -> io::Result<()> {
         matches.is_present("trim-read-name"),
         matches.value_of("group-name").unwrap_or(""),
         keep_n_longest,
+        sampling_rate,
     );
 
     Ok(())

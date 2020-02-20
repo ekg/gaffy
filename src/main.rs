@@ -186,7 +186,7 @@ fn do_matrix(
         if query_length >= min_length
             && query_length <= max_length
             && query_length >= query_length_threshold
-            && (((sampling_rate - 1.0f64).abs() == 0.0f64 || rng.gen::<f64>() < sampling_rate) && sampled_read_count < sample_up_to)
+            && ((sampling_rate - 1.0f64).abs() == 0.0f64 || rng.gen::<f64>() < sampling_rate && sampled_read_count < sample_up_to)
         {
             sampled_read_count += 1;
             if vectorize {
@@ -281,7 +281,7 @@ fn main() -> io::Result<()> {
              .long("sampling-rate")
              .takes_value(true)
              .help("Sample selected alignments at this rate [0-1]."))
-        .arg(Arg::with_name("sampling-up-to")
+        .arg(Arg::with_name("sample-up-to")
              .short("u")
              .long("sample-up-to")
              .takes_value(true)
@@ -337,7 +337,7 @@ fn main() -> io::Result<()> {
     };
     let sample_up_to = if matches.is_present("sample-up-to") {
         matches
-            .value_of("sampling-up-to")
+            .value_of("sample-up-to")
             .unwrap()
             .parse::<u64>()
             .unwrap()

@@ -186,7 +186,8 @@ fn do_matrix(
         if query_length >= min_length
             && query_length <= max_length
             && query_length >= query_length_threshold
-            && ((sampling_rate - 1.0f64).abs() == 0.0f64 || rng.gen::<f64>() < sampling_rate && sampled_read_count < sample_up_to)
+            && ((sampling_rate - 1.0f64).abs() == 0.0f64 || rng.gen::<f64>() < sampling_rate)
+            && sampled_read_count < sample_up_to
         {
             sampled_read_count += 1;
             if vectorize {

@@ -126,7 +126,9 @@ fn do_matrix(
     group_name: &str,
     keep_n_longest: usize,
     sampling_rate: f64,
+    sample_up_to: u64,
 ) {
+    let mut sampled_read_count = 0;
     let graph = if !gfa_filename.is_empty() {
         GfaGraph::from_gfa(gfa_filename)
     } else {
@@ -184,8 +186,9 @@ fn do_matrix(
         if query_length >= min_length
             && query_length <= max_length
             && query_length >= query_length_threshold
-            && ((sampling_rate - 1.0f64).abs() == 0.0f64 || rng.gen::<f64>() < sampling_rate)
+            && (((sampling_rate - 1.0f64).abs() == 0.0f64 || rng.gen::<f64>() < sampling_rate) && sampled_read_count < sample_up_to)
         {
+            sampled_read_count += 1;
             if vectorize {
                 for (j, n) in path.split(|c| c == '<' || c == '>').enumerate() {
                     if !n.is_empty() {
@@ -278,6 +281,11 @@ fn main() -> io::Result<()> {
              .long("sampling-rate")
              .takes_value(true)
              .help("Sample selected alignments at this rate [0-1]."))
+        .arg(Arg::with_name("sampling-up-to")
+             .short("u")
+             .long("sample-up-to")
+             .takes_value(true)
+             .help("Sample up to this many alignments."))
         .get_matches();
 
     let filename = matches.value_of("INPUT").unwrap();
@@ -327,6 +335,15 @@ fn main() -> io::Result<()> {
     } else {
         1.0
     };
+    let sample_up_to = if matches.is_present("sample-up-to") {
+        matches
+            .value_of("sampling-up-to")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap()
+    } else {
+        u64::max_value()
+    };
 
     do_matrix(
         filename,
@@ -340,6 +357,7 @@ fn main() -> io::Result<()> {
         matches.value_of("group-name").unwrap_or(""),
         keep_n_longest,
         sampling_rate,
+        sample_up_to,
     );
 
     Ok(())
